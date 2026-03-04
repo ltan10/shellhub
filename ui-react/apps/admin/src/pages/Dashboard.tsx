@@ -25,8 +25,8 @@ import { TH } from "../utils/styles";
 export default function Dashboard() {
   const {
     totalCount: devicesCount,
-    loading,
     fetch: fetchDevices,
+    setStatus: setDevicesStatus,
   } = useDevicesStore();
   const { currentNamespace } = useNamespacesStore();
   const { sessions, fetch: fetchSessions } = useSessionsStore();
@@ -41,7 +41,15 @@ export default function Dashboard() {
       .catch(() => {});
   }, [fetchDevices, fetchSessions]);
 
-  if (!loading && devicesCount === 0 && currentNamespace) {
+  // Suppress flash: while stats are loading, don't render the full dashboard
+  if (stats === null) return null;
+
+  const hasAnyDevices =
+    stats.registered_devices > 0 ||
+    stats.pending_devices > 0 ||
+    stats.rejected_devices > 0;
+
+  if (!hasAnyDevices && currentNamespace) {
     return (
       <WelcomeScreen
         namespaceName={currentNamespace.name}
@@ -49,6 +57,11 @@ export default function Dashboard() {
       />
     );
   }
+
+  const goToPending = () => {
+    setDevicesStatus("pending");
+    navigate("/devices");
+  };
 
   return (
     <div>
@@ -92,7 +105,7 @@ export default function Dashboard() {
             icon={<SignalIcon className="w-7 h-7" />}
             title="Online Devices"
             value={stats?.online_devices ?? "--"}
-            linkLabel="View online"
+            linkLabel="View all devices"
             linkTo="/devices"
             accent="text-accent-green"
           />
@@ -103,7 +116,7 @@ export default function Dashboard() {
             title="Pending Devices"
             value={stats?.pending_devices ?? "--"}
             linkLabel="View pending"
-            linkTo="/devices"
+            onClick={goToPending}
             accent="text-accent-yellow"
           />
         </div>
