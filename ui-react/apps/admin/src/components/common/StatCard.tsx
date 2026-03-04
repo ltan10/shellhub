@@ -1,14 +1,25 @@
 import { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
-interface StatCardProps {
+interface StatCardBaseProps {
   icon: ReactNode;
   title: string;
   value: number | string;
   linkLabel: string;
-  linkTo: string;
   accent?: string;
 }
+
+interface StatCardLinkProps extends StatCardBaseProps {
+  linkTo: string;
+  onClick?: never;
+}
+
+interface StatCardButtonProps extends StatCardBaseProps {
+  onClick: () => void;
+  linkTo?: never;
+}
+
+type StatCardProps = StatCardLinkProps | StatCardButtonProps;
 
 export default function StatCard({
   icon,
@@ -16,6 +27,7 @@ export default function StatCard({
   value,
   linkLabel,
   linkTo,
+  onClick,
   accent,
 }: StatCardProps) {
   return (
@@ -34,12 +46,22 @@ export default function StatCard({
         {value}
       </p>
 
-      <Link
-        to={linkTo}
-        className="text-xs font-medium text-primary hover:text-primary-400 transition-colors"
-      >
-        {linkLabel} &rarr;
-      </Link>
+      {onClick ? (
+        <button
+          onClick={onClick}
+          className="text-xs font-medium text-primary hover:text-primary-400 transition-colors"
+        >
+          {linkLabel} &rarr;
+        </button>
+      ) : (
+        // linkTo is guaranteed to be a string when onClick is absent (discriminated union)
+        <Link
+          to={linkTo!}
+          className="text-xs font-medium text-primary hover:text-primary-400 transition-colors"
+        >
+          {linkLabel} &rarr;
+        </Link>
+      )}
     </div>
   );
 }
