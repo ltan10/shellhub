@@ -264,7 +264,7 @@ standalone_install() {
     echo "📥 Downloading ShellHub agent binary..."
 
     {
-      download "https://github.com/shellhub-io/shellhub/releases/download/$AGENT_VERSION/shellhub-agent-linux-$BINARY_ARCH.gz" "$TMP_DIR/shellhub-agent.gz"
+      download "$SERVER_ADDRESS/download/$AGENT_VERSION/shellhub-agent-linux-$BINARY_ARCH.gz" "$TMP_DIR/shellhub-agent.gz"
     } || { rm -rf "$TMP_DIR" && echo "❌ Failed to download agent binary." && exit 1; }
 
     echo "📂 Extracting binary..."
