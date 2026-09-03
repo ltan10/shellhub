@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	agentEnvFile     = "/etc/shellhub-agent.env"
+	agentEnvFile     = "/etc/shellhub-agent/shellhub-agent.env"
 	agentServiceFile = "/etc/systemd/system/shellhub-agent.service"
 	agentServiceName = "shellhub-agent"
 )
@@ -26,7 +26,7 @@ Wants=network-online.target
 Requires=local-fs.target
 
 [Service]
-EnvironmentFile=/etc/shellhub-agent.env
+EnvironmentFile=/etc/shellhub-agent/shellhub-agent.env
 ExecStart={{.BinaryPath}}
 Restart=on-failure
 RestartSec=5
@@ -83,7 +83,12 @@ func registerInstallerCommands(rootCmd *cobra.Command) {
 
 	installCmd.Flags().String("server-address", "", "ShellHub server address")
 	installCmd.Flags().String("tenant-id", "", "Namespace tenant ID")
-	installCmd.Flags().String("private-key", "/etc/shellhub.key", "Path to the agent private key file")
+	installCmd.Flags().String(
+		"private-key",
+		"/etc/shellhub-agent/shellhub.key",
+		"Path to the agent private key file",
+	)
+	installCmd.Flags().String("install-key", "", "Install key used to enroll the device")
 	installCmd.Flags().String("preferred-hostname", "", "Preferred device hostname")
 	installCmd.Flags().String("preferred-identity", "", "Preferred device identity")
 	installCmd.Flags().Uint("keepalive-interval", 30, "Keepalive interval in seconds")
@@ -117,9 +122,10 @@ func agentInstall(cfg installerConfig) error {
 		return fmt.Errorf("systemd is not available on this system")
 	}
 
-	// Stop existing service before overwriting files (re-install / upgrade).
-	// Ignore error — service may not exist yet.
-	exec.Command("systemctl", "disable", "--now", agentServiceName).Run() //nolint:errcheck
+	// Do not disable/stop the service here. During an upgrade over the SSH tunnel,
+	// stopping the service disconnects the session and causes the agent to receive
+	// SIGHUP, which can cause the installation to fail. The service is restarted
+	// at the end of the install/upgrade procedure.
 
 	exe, err := os.Executable()
 	if err != nil {
@@ -129,6 +135,10 @@ func agentInstall(cfg installerConfig) error {
 	binaryPath, err := filepath.EvalSymlinks(exe)
 	if err != nil {
 		return fmt.Errorf("failed to resolve symlinks: %w", err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(agentEnvFile), 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", filepath.Dir(agentEnvFile), err)
 	}
 
 	if err := writeAgentEnvFile(cfg); err != nil {
@@ -143,8 +153,15 @@ func agentInstall(cfg installerConfig) error {
 		return fmt.Errorf("failed to reload systemd daemon: %w", err)
 	}
 
-	if err := exec.Command("systemctl", "enable", "--now", agentServiceName).Run(); err != nil {
+	// NOTE: Only enable the service here to maintain the SSH tunnel if one is active.
+	// The service will be restarted after the upgrade.
+	if err := exec.Command("systemctl", "enable", agentServiceName).Run(); err != nil {
 		return fmt.Errorf("failed to enable service: %w", err)
+	}
+
+	// Finally, restart the service with the newly installed version.
+	if err := exec.Command("systemctl", "restart", agentServiceName).Run(); err != nil {
+		return fmt.Errorf("failed to restart service: %w", err)
 	}
 
 	return nil
